@@ -1,6 +1,11 @@
 -- Define the WebSocket dissector
 ocpp_proto = Proto("ocpp", "Open Charge Point Protocol Dissector")
 
+-- Define preferences for the plugin
+ocpp_proto.prefs.schemas16  = Pref.string("Path to OCPPv1.6 schemas:  ", "", "Path to OCPPv1.6 schemas")
+ocpp_proto.prefs.schemas20  = Pref.string("Path to OCPPv2.0 schemas:  ", "", "Path to OCPPv2.0 schemas")
+ocpp_proto.prefs.schemas201 = Pref.string("Path to OCPPv2.0.1 schemas:", "", "Path to OCPPv2.0.1 schemas")
+
 -- Define fields for the protocol
 local f_message_type = ProtoField.uint8("ocpp2.0.1.message_type", "Message Type", base.DEC)
 local f_message_id = ProtoField.string("ocpp2.0.1.message_id", "Message ID")
@@ -31,12 +36,16 @@ end
 
 
 -- Table to store loaded schemas
+local areSchemasLoaded = false
 local schemas201 = {}
 local schemas20 = {}
 local schemas16 = {}
 
 -- Helper to load schemas at startup
 local function load_schemas(schema_dir, version)
+    if schema_dir == "" then
+        return
+    end
     local files = io.popen('ls ' .. schema_dir):lines() -- List files in schema_dir
     for file in files do
         local schema_path = schema_dir .. "/" .. file
@@ -101,20 +110,6 @@ function printTable(tbl, indent)
         end
     end
 end
-
-print('************************2.0.1************************')
-load_schemas(os.getenv("HOME") .. "/Desktop/ocpp-simulator/venv/lib/python3.12/site-packages/ocpp/v201/schemas", "2.0.1")
-printTable(schemas201)
-print('\n')
-print('************************1.6************************')
-load_schemas(os.getenv("HOME") .. "/Desktop/ocpp-simulator/venv/lib/python3.12/site-packages/ocpp/v16/schemas", "1.6")
-printTable(schemas16)
-print('\n')
-print('************************2.0************************')
-load_schemas(os.getenv("HOME") .. "/Desktop/ocpp-simulator/venv/lib/python3.12/site-packages/ocpp/v20/schemas", "2.0")
-printTable(schemas20)
-print('\n')
-
 
 -- Function to validate JSON against a schema
 local function validate_json(payload, schema_name)
@@ -254,6 +249,16 @@ end
 
 -- Dissector function
 function ocpp_proto.dissector(buffer, pinfo, tree)
+    if areSchemasLoaded == false then
+        print("************************2.0.1************************")
+        load_schemas(ocpp_proto.prefs.schemas201, "2.0.1")
+        print("*************************2.0*************************")
+        load_schemas(ocpp_proto.prefs.schemas20,  "2.0")
+        print("*************************1.6*************************")
+        load_schemas(ocpp_proto.prefs.schemas16,  "1.6")
+        areSchemasLoaded = true
+    end
+
     local length = buffer:len()
     if length == 0 then return end
 
