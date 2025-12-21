@@ -1,6 +1,8 @@
 -- Define the WebSocket dissector
 ocpp_proto = Proto("ocpp1.6", "Open Charge Point Protocol v1.6 Dissector")
 
+ocpp_proto.prefs.schemas16  = Pref.string("Path to OCPPv1.6 schemas:  ", "", "Path to OCPPv1.6 schemas")
+
 -- Define fields for the protocol
 local f_message_type = ProtoField.uint8("ocpp1.6.message_type", "Message Type", base.DEC)
 local f_message_id = ProtoField.string("ocpp1.6.message_id", "Message ID")
@@ -16,90 +18,11 @@ ocpp_proto.experts = { f_ipv6_expert, f_valid_expert }
 
 ocpp_proto.fields = {f_message_type, f_message_id, f_message_name, f_payload, f_valid, f_ipv6}
 
-local cjson = require("cjson")
-local jsonschema = require("jsonschema")
-
-local function remove_bom(content)
-    local bom = "\239\187\191" -- EF BB BF in decimal
-    if content:sub(1, 3) == bom then
-        return content:sub(4) -- Remove the first three bytes
-    end
-    return content
-end
-
-local function remove_id_property(schema)
-    if type(schema) == "table" then
-        schema["$id"] = nil -- Remove the $id key
-        for key, value in pairs(schema) do
-            remove_id_property(value) -- Recursively remove $id in nested objects
-        end
-    end
-end
-
+local ocpputil = require("ocpputil")
 
 -- Table to store loaded schemas
+local areSchemasLoaded = false
 local schemas16 = {}
-
--- Helper to load schemas at startup
-local function load_schemas(schema_dir)
-    local files = io.popen('ls ' .. schema_dir):lines() -- List files in schema_dir
-    for file in files do
-        local schema_path = schema_dir .. "/" .. file
-        local schema_file = io.open(schema_path, "r") -- Open the schema file
-        if schema_file then
-            local schema_content = schema_file:read("*all") -- Read schema content
-            schema_content = remove_bom(schema_content)
-            schema_file:close()
-            local success, schema = pcall(cjson.decode, schema_content)
-            if success then
-                local success_validator, compiled_schema = pcall(jsonschema.generate_validator, schema)
-                if success_validator then
-                    -- Store the compiled schema
-                    local schema_name = file:gsub("%.json$", ""):gsub("_v%d+p%d+$", "")
-                    my_validator = jsonschema.generate_validator(schema)
-                    schemas16[schema_name] = my_validator
-                else
-                    -- Retry after removing $id
-                    print("Failed to compile schema for file: " .. file .. ". Retrying without $id...")
-                    remove_id_property(schema)
-                    success_validator, compiled_schema = pcall(jsonschema.generate_validator, schema)
-                    if success_validator then
-                        local schema_name = file:gsub("%.json$", ""):gsub("_v%d+p%d+$", "")
-                        my_validator = jsonschema.generate_validator(schema)
-                        schemas16[schema_name] = my_validator
-                    else
-                        print("Error compiling schema for file after removing $id: " .. file .. ": " .. compiled_schema)
-                    end
-                end
-            else
-                print("Error decoding schema for file: " .. file .. ": " .. schema)
-            end
-        else
-            print("Error opening schema file: " .. schema_path)
-        end
-    end
-end
-
-function printTable(tbl, indent)
-    indent = indent or 0
-    local padding = string.rep("  ", indent)
-
-    for key, value in pairs(tbl) do
-        if type(value) == "table" then
-            print(padding .. tostring(key) .. " => {")
-            printTable(value, indent + 1)
-            print(padding .. "}")
-        else
-            print(padding .. tostring(key) .. " => " .. tostring(value))
-        end
-    end
-end
-
-print('************************1.6************************')
-load_schemas(os.getenv("HOME") .. "/Desktop/ocpp-simulator/venv/lib/python3.12/site-packages/ocpp/v16/schemas")
-printTable(schemas16)
-print('\n')
-
 
 -- Function to validate JSON against a schema
 local function validate_json(payload, schema_name)
@@ -138,17 +61,6 @@ local function validate_json(payload, schema_name)
     end
 end
 
-
-function jsonToLua(jsonStr)
-    -- Decode the JSON string into a Lua table
-    local success, result = pcall(cjson.decode, jsonStr)
-    if not success then
-        error("Invalid JSON format: " .. tostring(result))
-    end
-
-    return result
-end
-
 function printLuaTable(tbl, indent)
     indent = indent or 0 -- Track the indentation level
     local padding = string.rep("  ", indent) -- Indent with spaces
@@ -165,51 +77,14 @@ function printLuaTable(tbl, indent)
     end
 end
 
-function parseJSONArray(jsonStr)
-    local parts = {}
-    local in_quotes = false
-    local escape = false
-    local buffer = ""
-    local bracket_count = 0
-
-    for i = 2, #jsonStr - 1 do -- Ignore the outer square brackets
-        local char = jsonStr:sub(i, i)
-
-        if char == '"' and not escape then
-            in_quotes = not in_quotes
-        elseif char == "\\" and in_quotes then
-            escape = not escape
-        elseif char == "{" or char == "[" then
-            if not in_quotes then
-                bracket_count = bracket_count + 1
-            end
-        elseif char == "}" or char == "]" then
-            if not in_quotes then
-                bracket_count = bracket_count - 1
-            end
-        elseif char == "," and not in_quotes and bracket_count == 0 then
-            -- Push completed element to parts
-            parts[#parts + 1] = buffer:match("^%s*(.-)%s*$") -- Trim whitespace
-            buffer = ""
-        else
-            escape = false
-        end
-
-        buffer = buffer .. char
-    end
-
-    -- Add the last element
-    parts[#parts + 1] = buffer:match("^%s*(.-)%s*$") -- Trim whitespace
-    return parts
-end
-
-
-local function cleanElement(str)
-    return str:match("^%s*,?%s*(.-)%s*$") -- Remove leading comma and spaces
-end
-
 -- Dissector function
 function ocpp_proto.dissector(buffer, pinfo, tree)
+    if areSchemasLoaded == false then
+        print("*************************1.6*************************")
+        ocpputil.load_schema(ocpp_proto.prefs.schemas16, schemas16)
+        areSchemasLoaded = true
+    end
+
     local length = buffer:len()
     local ipv6 = false
     if length == 0 then return end
@@ -228,26 +103,26 @@ function ocpp_proto.dissector(buffer, pinfo, tree)
     local payload = buffer():string()
 
     -- Extract elements from the JSON array
-    local elements = parseJSONArray(payload)
+    local elements = ocpputil.parseJSONArray(payload)
 
     -- Extract individual elements
     local message_type = tonumber(elements[1])
     print(string.format("Type: %s", tostring(message_type)))
-    local message_id = cleanElement(elements[2]:gsub('^["\'](.-)["\']$', '%1'))
+    local message_id = ocpputil.cleanElement(elements[2]:gsub('^["\'](.-)["\']$', '%1'))
     print(string.format("ID: %s", tostring(message_id)))
     if not(message_type == 3) then
-        message_name = cleanElement(elements[3]:gsub('^["\'](.-)["\']$', '%1'))
+        message_name = ocpputil.cleanElement(elements[3]:gsub('^["\'](.-)["\']$', '%1'))
         print(string.format("Name: %s", tostring(message_name)))
-        json_data_str = cleanElement(elements[4]) 
+        json_data_str = ocpputil.cleanElement(elements[4]) 
     else
-        json_data_str = cleanElement(elements[3])
+        json_data_str = ocpputil.cleanElement(elements[3])
     end
 
     print(string.format("Data: %s", tostring(json_data_str)))
     print('\n')
 
     -- Parse and display JSON if possible
-    local json_data = jsonToLua(json_data_str)
+    local json_data = ocpputil.jsonToLua(json_data_str)
     print('LUA Table:')
     printLuaTable(json_data)
     print('\n\n')
