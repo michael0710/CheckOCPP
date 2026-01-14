@@ -3,6 +3,15 @@ local ocpputil = { }
 local cjson = require("cjson")
 local jsonschema = require("jsonschema")
 
+local function is_windows_platform()
+    local pathseparator = package.config:sub(1,1);
+    if pathseparator == "\\" then
+        return true
+    else
+        return false
+    end
+end
+
 local function remove_bom(content)
     local bom = "\239\187\191" -- EF BB BF in decimal
     if content:sub(1, 3) == bom then
@@ -76,12 +85,14 @@ local function load_schema(schema_dir, schema_var)
     if schema_dir == "" then
         return
     end
--- if linux: use ...
-    --    local files = io.popen('ls ' .. schema_dir):lines()         -- List files in schema_dir   linux needs ls
--- elsif windows: use ...
-    local popen_rv = io.popen("dir " .. schema_dir:gsub("/", "\\"))   -- List files in schema_dir   windows needs dir and an extra sausage
-    local files = popen_rv:lines()
--- endif
+    local is_windows = is_windows_platform()
+    local files = nil
+    if is_windows == true then
+        local popen_rv = io.popen("dir " .. schema_dir:gsub("/", "\\"))   -- List files in schema_dir   windows needs dir and an extra sausage
+        files = popen_rv:lines()
+    else -- otherwise assume unix
+        files = io.popen('ls ' .. schema_dir):lines()         -- List files in schema_dir   linux needs ls
+    end
     for line in files do
         local file = line:match("[%a%d%-_]+%.json")
         if file ~= nil then

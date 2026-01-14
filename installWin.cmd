@@ -10,17 +10,11 @@ REM Optional:
 REM     Python (to install the ocpp json schemas)
 REM
 REM SYNOPSIS
-REM     .\install.bat (single|multiple) (global|local) [verbose]
+REM     .\installWin.cmd (single|multiple) (global|local) [verbose]
 REM            single: adds the ocppDissector.lua file to the existing Wireshark installation
 REM            multiple: adds the separate files ocpp16Dissector.lua, ocpp20Dissector.lua separate/ocpp201Dissector.lua to the existing Wireshark installation
 REM            global: adds the plugin to the global plugin folder
 REM            local: adds the plugin to the user specific plugin folder
-REM note that this batch file expects two arguments: either "single" or "multiple" as first argument and either "global" or "local" as second argument
-REM
-REM for developers not familiar with batch programming:
-REM     https://tutorialreference.com/batch-scripting/batch-script-introduction
-REM for information on how the batch line parser works (oder of expansion):
-REM     https://stackoverflow.com/questions/4094699/how-does-the-windows-command-interpreter-cmd-exe-parse-scripts/4095133#4095133
 
 setlocal enabledelayedexpansion
 echo Installing the CheckOCPP dissector to wireshark ...
@@ -77,14 +71,18 @@ if "!pathToWireshark:~0,26!"=="C:\Program Files\Wireshark" (
 
 if isGlobalInstallation==true (
     if "%installDirType%"=="global" (
+        set luaModulesDirType=--global
         set pluginPath=%pathToWireshark%plugins
     ) else (
+        set luaModulesDirType=--local
         set pluginPath=%APPDATA%\Wireshark\plugins
     )
 ) else (
     if "%installDirType%"=="global" (
+        set luaModulesDirType=--local
         set pluginPath=%pathToWireshark%plugins
     ) else (
+        set luaModulesDirType=--local
         set pluginPath=%pathToWireshark%..\..\Data\plugins
     )
 )
@@ -124,26 +122,23 @@ if "%pluginType%"=="single" (
 
 echo.
 echo Finding the path to the lua libraries ...
-FOR /F "tokens=* delims=" %%x in ('luarocks --lua-version %wsLuaVersion% config home_tree') DO set luaPathPrefix=%%x
-FOR /F "tokens=* delims=" %%x in ('luarocks --lua-version %wsLuaVersion% config lua_modules_path') DO set luaPathSuffix=%%x
-FOR /F "tokens=* delims=" %%x in ('luarocks --lua-version %wsLuaVersion% config lib_modules_path') DO set luaCPathSuffix=%%x
-set luaPath=%luaPathPrefix%\%luaPathSuffix%
-set luaCPath=%luaPathPrefix%\%luaCPathSuffix%
+FOR /F "tokens=* delims=" %%x in ('luarocks --lua-version %wsLuaVersion% %luaModulesDirType% config deploy_lua_dir') DO set luaPath=%%x
+FOR /F "tokens=* delims=" %%x in ('luarocks --lua-version %wsLuaVersion% %luaModulesDirType% config deploy_lib_dir') DO set luaCPath=%%x
 echo # Found lua modules path '%luaPath%'
 echo # Found library modules path '%luaCPath%'
 
 echo.
 echo Installing the necessary lua libraries with luarocks ...
 
-echo # Installing 'net-url' by executing 'luarocks --lua-version %wsLuaVersion% install net-url 1.1-1' ...
-call luarocks --lua-version %wsLuaVersion% install net-url 1.1-1 > nul 2>&1 || (  echo # ERROR: luarocks command to install 'net-url' version 1.1-1 failed with return code %ERRORLEVEL% ^
-                                                                                & echo # Please try to rerun the prompted command to get more detailed information about the error ^
-                                                                                & exit /B 1)
+echo # Installing 'net-url' by executing 'luarocks --lua-version %wsLuaVersion% %luaModulesDirType% install net-url 1.1-1' ...
+call luarocks --lua-version %wsLuaVersion% %luaModulesDirType% install net-url 1.1-1 > nul 2>&1 || (  echo # ERROR: luarocks command to install 'net-url' version 1.1-1 failed with return code %ERRORLEVEL% ^
+                                                                                                    & echo # Please try to rerun the prompted command to get more detailed information about the error ^
+                                                                                                    & exit /B 1)
 
-echo # Installing 'lua-cjson' by executing 'luarocks --lua-version %wsLuaVersion% install lua-cjson 2.1.0.10-1' ...
-call luarocks --lua-version %wsLuaVersion% install lua-cjson 2.1.0.10-1 > nul 2>&1 || (  echo # ERROR: luarocks command to install 'lua-cjson' version 2.1.0.10-1 failed with return code %ERRORLEVEL% ^
-                                                                                       & echo # Please try to rerun the prompted command to get more detailed information about the error ^
-                                                                                       & exit /B 1)
+echo # Installing 'lua-cjson' by executing 'luarocks --lua-version %wsLuaVersion% %luaModulesDirType% install lua-cjson 2.1.0.10-1' ...
+call luarocks --lua-version %wsLuaVersion% %luaModulesDirType% install lua-cjson 2.1.0.10-1 > nul 2>&1 || (  echo # ERROR: luarocks command to install 'lua-cjson' version 2.1.0.10-1 failed with return code %ERRORLEVEL% ^
+                                                                                                           & echo # Please try to rerun the prompted command to get more detailed information about the error ^
+                                                                                                           & exit /B 1)
 
 REM a little hacky workaround is necessary here... if one would install the jsonschema package
 REM by using luarocks with the command 'luarocks --lua-version %wsLuaVersion% install jsonschema'
@@ -180,7 +175,6 @@ echo # Clean up unzipped folder structure ...
 call rmdir /s /q jsonschema-0.9.9 > nul 2>&1 || (echo # WARNING: 'rmdir' command failed)
 
 REM if the Wireshark installation is in C:\Program Files and the user wishes to install the plugin globally, it might not be possible due to missing permissions
-
 echo.
 echo Installing utility module 'ocpputil.lua' to local lua libraries ...
 call COPY /Y /V ocpputil.lua %luaPath% > nul 2>&1 || (echo # ERROR: 'COPY' command failed with return code %ERRORLEVEL% & exit /B 1)
