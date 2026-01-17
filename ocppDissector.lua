@@ -13,12 +13,43 @@ ocpp_proto.prefs.schemaTable = Pref.uat("Paths to the OCPP schemas", schemaTable
 ocpp_proto.prefs.schemas16  = Pref.string("Path to OCPPv1.6 schemas:  ", "", "Path to OCPPv1.6 schemas")
 ocpp_proto.prefs.schemas20  = Pref.string("Path to OCPPv2.0 schemas:  ", "", "Path to OCPPv2.0 schemas")
 ocpp_proto.prefs.schemas201 = Pref.string("Path to OCPPv2.0.1 schemas:", "", "Path to OCPPv2.0.1 schemas")
+ocpp_proto.prefs.schemas21  = Pref.string("Path to OCPPv2.1 schemas:",   "", "Path to OCPPv2.1 schemas")
+
+local OCPP_ALL_VERSIONS = 0
+local OCPP_1_6          = 1
+local OCPP_2_0          = 2
+local OCPP_2_0_1        = 3
+local OCPP_2_1          = 4
+local OCPP_VERS_2_DISSECT = {
+    { 1, "all versions" , OCPP_ALL_VERSIONS },
+    { 2, "1.6"          , OCPP_1_6 },
+    { 3, "2.0"          , OCPP_2_0 },
+    { 4, "2.0.1"        , OCPP_2_0_1 },
+    { 5, "2.1"          , OCPP_2_1 },
+}
+
+-- Create enum preference that shows as Combo Box under
+-- Foo Protocol's preferences
+ocpp_proto.prefs.proto_version = Pref.enum(
+    "Protocol version to dissect",      -- label
+    OCPP_ALL_VERSIONS,                  -- default value
+    "Protocol version to be dissected", -- description
+    OCPP_VERS_2_DISSECT,                -- enum table
+    false                               -- show as combo box
+)
 
 -- Define fields for the protocol
 local f_message_type = ProtoField.uint8("ocpp2.0.1.message_type", "Message Type", base.DEC)
 local f_message_id = ProtoField.string("ocpp2.0.1.message_id", "Message ID")
 local f_message_name = ProtoField.string("ocpp2.0.1.message_name", "Message Name")
 local f_payload = ProtoField.string("ocpp2.0.1.payload", "Payload (JSON)")
+local f_valid = ProtoField.bool("ocpp1.6.valid", "Valid?", base.NONE)
+local f_ipv6 = ProtoField.bool("ocpp1.6.ipv6", "IPv6?", base.NONE)
+
+local f_ipv6_expert = ProtoExpert.new("IPv6", "Expected IPv6, but packet is IPv4", expert.group.PROTOCOL, expert.severity.WARN)
+local f_valid_expert = ProtoExpert.new("OCPP_non_compliant", "OCPP non-compliant packet", expert.group.MALFORMED, expert.severity.ERROR)
+
+ocpp_proto.experts = { f_ipv6_expert, f_valid_expert }
 
 ocpp_proto.fields = {f_message_type, f_message_id, f_message_name, f_payload}
 
@@ -26,71 +57,148 @@ local ocpputil = require("ocpputil")
 
 -- Table to store loaded schemas
 local areSchemasLoaded = false
+local schemas21  = {}
 local schemas201 = {}
-local schemas20 = {}
-local schemas16 = {}
+local schemas20  = {}
+local schemas16  = {}
+-- as the responses do not contain the message name, but the id of request
+-- and response is the same, we have to keep track of which id corresponds
+-- to which message name.
+-- According to:
+-- OCPP-1.6J specification 4.2.2. CallResult
+-- OCPP-2.0.1J specification 4.2.2. CallResult
+-- OCPP-2.1J specification 4.2.2. CallResult
+local msg_name_id_lut = {}
+
+local function advanced_get(tbl, key_col, value_col, key)
+    for idx, entry in next, tbl do
+        if entry[key_col] == key then
+            return true, entry[value_col]
+        end
+    end
+    return false, ""
+end
+
+-- reload schemas when preferences are changed
+function ocpp_proto.prefs_changed()
+    print("*************************2.1*************************")
+    schemas21 = {}
+    ocpputil.load_schema(ocpp_proto.prefs.schemas21, schemas21)
+    print("************************2.0.1************************")
+    schemas201 = {}
+    ocpputil.load_schema(ocpp_proto.prefs.schemas201, schemas201)
+    print("*************************2.0*************************")
+    schemas20 = {}
+    ocpputil.load_schema(ocpp_proto.prefs.schemas20, schemas20)
+    print("*************************1.6*************************")
+    schemas16 = {}
+    ocpputil.load_schema(ocpp_proto.prefs.schemas16, schemas16)
+    areSchemasLoaded = true
+end
 
 -- Function to validate JSON against a schema
 local function validate_json(payload, schema_name)
-    local function validate_schema(schema_group, schema_name_key)
-        local schema = schema_group[schema_name_key]
-        if not schema then
-            return false, "Schema not found for: " .. tostring(schema_name_key)
-        end
-        
-        -- Safely execute schema validation
-        local success, err = schema(payload)
-        if not success then
-            return false, "Error during schema validation: " .. tostring(err)
-        end
-        return success, nil
-    end
-
-    local success16, err16
-    local success20, err20
-    local success201, err201
+    local success16 = false
+    local err16 = ""
+    local success20 = false
+    local err20 = ""
+    local success201 = false
+    local err201 = ""
+    local success21 = false
+    local err21 = ""
 
     -- Handle schema16 validation
-    local status16, result16 = pcall(function()
-        local key16 = schema_name:gsub("Request$", "")
-        success16, err16 = validate_schema(schemas16, key16)
-    end)
-    if not status16 then
-        print("Error in V16 validation: ", result16)
-        return false, result16, "None"
+    if    (ocpp_proto.prefs.proto_version == OCPP_ALL_VERSIONS)
+       or (ocpp_proto.prefs.proto_version == OCPP_1_6) then
+        local status16, result16 = pcall(function()
+            print("schema_name is: " .. schema_name)
+            local key16 = schema_name:gsub("Request$", "")
+            success16, err16 = ocpputil.validate_schema(payload, schemas16, key16)
+        end)
+        if not status16 then
+            print("Error in V16 validation: ", result16)
+            return false, result16, "None"
+        end
     end
 
     -- Handle schema20 validation
-    local status20, result20 = pcall(function()
-        success20, err20 = validate_schema(schemas20, schema_name)
-    end)
-    if not status20 then
-        print("Error in V20 validation: ", result20)
+    if    (ocpp_proto.prefs.proto_version == OCPP_ALL_VERSIONS)
+       or (ocpp_proto.prefs.proto_version == OCPP_2_0) then
+        local status20, result20 = pcall(function()
+            success20, err20 = ocpputil.validate_schema(payload, schemas20, schema_name)
+        end)
+        if not status20 then
+            print("Error in V20 validation: ", result20)
+        end
     end
 
     -- Handle schema201 validation
-    local status201, result201 = pcall(function()
-        success201, err201 = validate_schema(schemas201, schema_name)
-    end)
-    if not status201 then
-        print("Error in V201 validation: ", result201)
+    if    (ocpp_proto.prefs.proto_version == OCPP_ALL_VERSIONS)
+       or (ocpp_proto.prefs.proto_version == OCPP_2_0_1) then
+        local status201, result201 = pcall(function()
+            success201, err201 = ocpputil.validate_schema(payload, schemas201, schema_name)
+        end)
+        if not status201 then
+            print("Error in V201 validation: ", result201)
+        end
     end
 
-    -- Decision logic remains the same
-    if success16 and success20 and success201 then
-        return true, nil, 'All'
-    elseif success16 and success20 then
-        return true, nil, '1.6/2.0'
-    elseif success16 and success201 then
-        return true, nil, '1.6/2.0.1'
-    elseif success20 and success201 then
-        return true, nil, '2.0/2.0.1'
-    elseif success16 then
-        return success16, err16, '1.6'
-    elseif success20 then
-        return success20, err20, '2.0'
-    elseif success201 then
-        return success201, err201, '2.0.1'
+    -- Handle schema21 validation
+    if    (ocpp_proto.prefs.proto_version == OCPP_ALL_VERSIONS)
+       or (ocpp_proto.prefs.proto_version == OCPP_2_1) then
+        local status21, result21 = pcall(function()
+            success21, err21 = ocpputil.validate_schema(payload, schemas21, schema_name)
+        end)
+        if not status21 then
+            print("Error in V21 validation: ", result21)
+        end
+    end
+
+    -- pack the validated procotol versions in a string
+    local vers_str = ''
+    -- flag the message as 'All' if the validation succeeded for
+    -- all schemas that are registered
+    if     (success16  or (ocpp_proto.prefs.schemas16  == ''))
+       and (success20  or (ocpp_proto.prefs.schemas20  == '')) 
+       and (success201 or (ocpp_proto.prefs.schemas201 == '')) 
+       and (success21  or (ocpp_proto.prefs.schemas21  == '')) then
+        vers_str = 'All'
+    else
+        if success16 then
+            if not (vers_str == '') then
+                vers_str = vers_str .. '/1.6'
+            else
+                vers_str = '1.6'
+            end
+        end
+
+        if success20 then
+            if not (vers_str == '') then
+                vers_str = vers_str .. '/2.0'
+            else
+                vers_str = '2.0'
+            end
+        end
+
+        if success201 then
+            if not (vers_str == '') then
+                vers_str = vers_str .. '/2.0.1'
+            else
+                vers_str = '2.0.1'
+            end
+        end
+
+        if success21 then
+            if not (vers_str == '') then
+                vers_str = vers_str .. '/2.1'
+            else
+                vers_str = '2.1'
+            end
+        end
+    end
+
+    if success16 or success20 or success201 or success21 then
+        return true, nil, vers_str
     else
         return false, tostring(err16) .. '   ' .. tostring(err20) .. '   ' .. tostring(err201), 'None'
     end
@@ -115,20 +223,24 @@ end
 -- Dissector function
 function ocpp_proto.dissector(buffer, pinfo, tree)
     if areSchemasLoaded == false then
-        print("************************2.0.1************************")
-        ocpputil.load_schema(ocpp_proto.prefs.schemas201, schemas201)
-        print("*************************2.0*************************")
-        ocpputil.load_schema(ocpp_proto.prefs.schemas20, schemas20)
-        print("*************************1.6*************************")
-        ocpputil.load_schema(ocpp_proto.prefs.schemas16, schemas16)
-        areSchemasLoaded = true
+        -- usually wireshark calls the prefs_changed() function on startup
+        -- and hereby loads our schemas. However, somehow I don't trust
+        -- that feature, so make sure the schemas are loaded here.
+        ocpp_proto.prefs_changed()
     end
     
     local length = buffer:len()
+    local ipv6 = false
     if length == 0 then return end
 
-    print('New Packet!!!')
-    print('\n')
+    print("New Packet!!! ***************************************")
+
+    print(pinfo.src)
+    if tostring(pinfo.src):match("^(%d+%.%d+%.%d+%.%d+)$") then
+        ipv6 = false
+    elseif tostring(pinfo.src):match("^([a-fA-F0-9:]+)$") then
+        ipv6 = true
+    end
 
     -- Convert buffer to a string
     local payload = buffer():string()
@@ -141,8 +253,10 @@ function ocpp_proto.dissector(buffer, pinfo, tree)
     print(string.format("Type: %s", tostring(message_type)))
     local message_id = ocpputil.cleanElement(elements[2]:gsub('^["\'](.-)["\']$', '%1'))
     print(string.format("ID: %s", tostring(message_id)))
+    local message_name = ""
     if not(message_type == 3) then
         message_name = ocpputil.cleanElement(elements[3]:gsub('^["\'](.-)["\']$', '%1'))
+        msg_name_id_lut[message_id] = message_name
         print(string.format("Name: %s", tostring(message_name)))
         json_data_str = ocpputil.cleanElement(elements[4]) 
     else
@@ -163,7 +277,8 @@ function ocpp_proto.dissector(buffer, pinfo, tree)
     if message_type == 2 then
         full_message_name = message_name:gsub('["]', '') .. "Request"
     elseif message_type == 3 then
-        full_message_name = message_name:gsub('["]', '') .. "Response"
+        -- get the actual message name from our look-up-table
+        full_message_name = msg_name_id_lut[message_id]:gsub('["]', '') .. "Response"
     end
 
     local is_valid, validation_error, version = validate_json(json_data, full_message_name)
@@ -183,15 +298,19 @@ function ocpp_proto.dissector(buffer, pinfo, tree)
         -- Create the protocol tree
         local subtree = tree:add(ocpp_proto, buffer(), "OCPP Protocol Payload")
 
-        
         -- Add elements to the tree
+        subtree:add(f_valid, is_valid):set_hidden(true)
+        if not ipv6 then
+            subtree:add(f_ipv6, false):set_hidden(true)
+            subtree:add_proto_expert_info(f_ipv6_expert)
+        end
         subtree:add(f_message_type, buffer(1, 1), message_type):append_text(" (2=Request, 3=Response, 4=Error)")
         subtree:add(f_message_id, buffer(3, #message_id), message_id)
-        if not(message_type == 3) then 
+        if message_type == 3 then
+            subtree:add(f_message_name, msg_name_id_lut[message_id]):append_text(" (implicit by ID)")
+        else
             subtree:add(f_message_name, buffer(#message_id + 4, #message_name), message_name)
         end
-
-        
 
         if json_data then
             if not(message_type == 3) then 
@@ -220,6 +339,21 @@ function ocpp_proto.dissector(buffer, pinfo, tree)
             add_key_value_pairs(payload_tree, json_data, "")
         else
             subtree:add(f_payload, buffer(#message_name + 2), "Invalid JSON")
+        end
+    else
+        if not (ocpp_proto.prefs.proto_version == OCPP_ALL_VERSIONS) then
+            -- TODO add expert information on invalid packet as by ocppXYDissecotr.lua
+            -- TODO remove the ocppXYDissector.lua when done
+            local rv, vers_str = advanced_get(OCPP_VERS_2_DISSECT, 3, 2, ocpp_proto.prefs.proto_version)
+            pinfo.cols.protocol = "OCPP " .. vers_str
+            local subtree = tree:add(ocpp_proto, buffer(), "OCPP Non-Compliant Packet")
+            subtree:add(ProtoField.string("ocpp" .. vers_str .. ".error", "Error"), buffer(), tostring(validation_error))
+            subtree:add(f_valid, is_valid):set_hidden(true)
+            subtree:add_proto_expert_info(f_valid_expert)
+            if not ipv6 then
+                subtree:add(f_ipv6, false):set_hidden(true)
+                subtree:add_proto_expert_info(f_ipv6_expert)
+            end
         end
     end
 end

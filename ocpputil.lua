@@ -81,10 +81,26 @@ local function parseJSONArray(jsonStr)
     return parts
 end
 
+local function validate_schema(payload, schema_group, schema_name_key)
+    local schema = schema_group[schema_name_key]
+    if not schema then
+        return false, "Schema not found for: " .. tostring(schema_name_key)
+    end
+    
+    -- Safely execute schema validation
+    local success, err = schema(payload)
+    if not success then
+        return false, "Error during schema validation: " .. tostring(err)
+    end
+    return true, nil
+end
+
 local function load_schema(schema_dir, schema_var)
     if schema_dir == "" then
+        print("schema_dir is empty, load_schema skipped")
         return
     end
+    print("schema_dir is " .. schema_dir)
     local is_windows = is_windows_platform()
     local files = nil
     if is_windows == true then
@@ -99,6 +115,7 @@ local function load_schema(schema_dir, schema_var)
             local schema_path = schema_dir .. "/" .. file
             local schema_file = io.open(schema_path, "r") -- Open the schema file
             if schema_file then
+                print("processing schema file: " .. schema_path)
                 local schema_content = schema_file:read("*all") -- Read schema content
                 schema_content = remove_bom(schema_content)
                 schema_file:close()
@@ -137,6 +154,7 @@ ocpputil.remove_id_property = remove_id_property
 ocpputil.jsonToLua          = jsonToLua
 ocpputil.cleanElement       = cleanElement
 ocpputil.parseJSONArray     = parseJSONArray
+ocpputil.validate_schema    = validate_schema
 ocpputil.load_schema        = load_schema
 
 return ocpputil

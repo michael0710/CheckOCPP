@@ -10,26 +10,16 @@ REM Optional:
 REM     Python (to install the ocpp json schemas)
 REM
 REM SYNOPSIS
-REM     .\installWin.cmd (single|multiple) (global|local) [verbose]
-REM            single: adds the ocppDissector.lua file to the existing Wireshark installation
-REM            multiple: adds the separate files ocpp16Dissector.lua, ocpp20Dissector.lua separate/ocpp201Dissector.lua to the existing Wireshark installation
+REM     .\installWin.cmd (global|local) [verbose]
 REM            global: adds the plugin to the global plugin folder
 REM            local: adds the plugin to the user specific plugin folder
 
 setlocal enabledelayedexpansion
 echo Installing the CheckOCPP dissector to wireshark ...
 
-if NOT "%1"=="single" (
-    if NOT "%1"=="multiple" (
-        echo ERROR: invalid first argument %1. Expected 'single' or 'multiple'
-        exit /B 1
-    )
-)
-set pluginType=%1
-
-if NOT "%2"=="global" (
-    if NOT "%2"=="local" (
-        echo ERROR: invalid second argument %2. Expected 'global' or 'local'
+if NOT "%1"=="global" (
+    if NOT "%1"=="local" (
+        echo ERROR: invalid first argument %1. Expected 'global' or 'local'
         exit /B 1
     )
 )
@@ -103,22 +93,7 @@ if NOT exist %pluginPath% (
 )
 
 echo Installing plugin to %pluginPath% ...
-if "%pluginType%"=="single" (
-    goto :installPlugin_single
-) else (
-    goto :installPlugin_multiple
-)
-
-:installPlugin_single
-    call COPY /Y /V ocppDissector.lua %pluginPath% > nul 2>&1 || (echo # ERROR: 'COPY' command failed with return code %ERRORLEVEL% & exit /B 1)
-    goto :installPlugin_finished
-:installPlugin_multiple
-    cd ./separate
-    call COPY /Y /V ocpp16Dissector.lua %pluginPath%  > nul 2>&1 || (echo # ERROR: 'COPY' command failed with return code %ERRORLEVEL% & exit /B 1)
-    call COPY /Y /V ocpp20Dissector.lua %pluginPath%  > nul 2>&1 || (echo # ERROR: 'COPY' command failed with return code %ERRORLEVEL% & exit /B 1)
-    call COPY /Y /V ocpp201Dissector.lua %pluginPath% > nul 2>&1 || (echo # ERROR: 'COPY' command failed with return code %ERRORLEVEL% & exit /B 1)
-    cd ..
-:installPlugin_finished
+call COPY /Y /V ocppDissector.lua %pluginPath% > nul 2>&1 || (echo # ERROR: 'COPY' command failed with return code %ERRORLEVEL% & exit /B 1)
 
 echo.
 echo Finding the path to the lua libraries ...

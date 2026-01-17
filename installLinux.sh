@@ -12,12 +12,7 @@
 #     Python (to install the ocpp json schemas)
 #
 # SYNOPSIS
-#     ./installLinux.sh (single|multiple) (global|local) [verbose]
-#            single: adds the ocppDissector.lua file to the existing Wireshark
-#                    installation
-#            multiple: adds the separate files ocpp16Dissector.lua,
-#                      ocpp20Dissector.lua, ocpp201Dissector.lua to the
-#                      existing Wireshark installation
+#     ./installLinux.sh (global|local) [verbose]
 #            global: adds the plugin to the global plugin folder
 #            local: adds the plugin to the user specific plugin folder
 
@@ -47,29 +42,23 @@ isVersionLT() {
 # start of the actual script --------------------------------------------------
 echo "Installing the CheckOCPP dissector to wireshark ...";
 
-if [ $# -lt 2 ]; then
-    echo "ERROR: expected at least two arguments, got $#";
+if [ $# -lt 1 ]; then
+    echo "ERROR: expected at least one argument, got $#";
     exit 1;
 fi
 
-if [ $1 != "single" ] && [ $1 != "multiple" ]; then
-    echo "ERROR: invalid first argument '$1'. Expected 'single' or 'multiple'";
+if [ $1 != "global" ] && [ $1 != "local" ]; then
+    echo "ERROR: invalid second argument '$1'. Expected 'global' or 'local'";
     exit 1;
 fi
-pluginType=$1
+installDirType=$1
 
-if [ $2 != "global" ] && [ $2 != "local" ]; then
-    echo "ERROR: invalid second argument '$2'. Expected 'global' or 'local'";
-    exit 1;
-fi
-installDirType=$2
-
-if [ $2 = "global" ] && [ "$(id -u)" -ne 0 ]; then
+if [ $1 = "global" ] && [ "$(id -u)" -ne 0 ]; then
 	echo "ERROR: With the 'global' option, the script must be run in privileged mode!"
 	exit 1
 fi
 
-if [ $# -ge 3 ] && [ $3 = "verbose" ]; then
+if [ $# -ge 2 ] && [ $2 = "verbose" ]; then
     echo "Activating verbose output ...";
     set -v;
 fi
@@ -118,29 +107,9 @@ if [ ! -e "$pluginPath" ] || [ ! -d "$pluginPath" ]; then
 fi
 
 echo "Installing plugin to $pluginPath ...";
-if [ "$pluginType" = "single" ]; then
-    if ! cp -u ocppDissector.lua $pluginPath >/dev/null 2>&1; then
-        echo "# ERROR: 'cp' command failed";
-        exit;
-    fi
-else
-    cd ./separate
-    if ! cp -u ocpp16Dissector.lua $pluginPath  >/dev/null 2>&1; then
-        echo "# ERROR: 'cp' command failed";
-        cd ..;
-        exit;
-    fi
-    if ! cp -u ocpp20Dissector.lua $pluginPath  >/dev/null 2>&1; then
-        echo "# ERROR: 'cp' command failed";
-        cd ..;
-        exit;
-    fi
-    if ! cp -u ocpp201Dissector.lua $pluginPath >/dev/null 2>&1; then
-        echo "# ERROR: 'cp' command failed";
-        cd ..;
-        exit;
-    fi
-    cd ..
+if ! cp -u ocppDissector.lua $pluginPath >/dev/null 2>&1; then
+    echo "# ERROR: 'cp' command failed";
+    exit;
 fi
 
 echo "";

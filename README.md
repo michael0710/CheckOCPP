@@ -7,9 +7,9 @@ CheckOCPP is a Wireshark dissector for the Open Charge Point Protocol (OCPP). It
 - **Protocol compliance validation**: Checks message structure and schema conformity.
 - **Non-compliant packet highlighting**: Flags invalid packets to aid debugging and compliance verification.
 - **IPv4/IPv6 traffic distinction**: Provides a visual indicator for OCPP packets transmitted over IPv4.
-- **Two dissector implementations**:
-    - **Single dissector**: Processes OCPP packets without distinguishing between versions.
-    - **Separate dissectors**: Assigns a distinct dissector to each OCPP version for more precise analysis.
+- **Selectable procotol version**:
+    - option **All versions**: Processes OCPP packets without distinguishing between versions.
+    - option **specific version**: Dissects only one specific protocol version and adds expert information for more precise analysis.
 
 ## Installation
 1. Ensure you have Wireshark installed on your system.
@@ -22,13 +22,11 @@ CheckOCPP is a Wireshark dissector for the Open Charge Point Protocol (OCPP). It
 1. Optionally, a `Python` installation can be used to retrieve the jsonschemas necessary by the plugin. The schemas might also be downloaded elsewhere.
 1. Depending on your system either the `installWin.cmd` or `installLinux.sh` script should be used to download the necessary lua libraries, add the paths to the `LUA_PATH` and `LUA_CPATH` environment variables and store the dissector to Wireshark's plugin folder. The script must be called the following way:
     ```
-    install(Win.cmd|Linux.sh) (single|multiple) (local|global) [verbose]
+    install(Win.cmd|Linux.sh) (local|global) [verbose]
     ```
-    - `single` as the first argument will install the **Single dissector**
-    - `multiple` as the first argument will install **Separate dissectors** for each version of OCPP
-    - `local` as second argument will install the dissector to Wireshark's local lua plugin path
-    - `global` as second argument will install the dissector to Wireshark's global lua plugin path. Note that for a global installation the script must be run with elevated privileges.
-    - `verbose` as third argument will enable verbose output
+    - `local` as first argument will install the dissector to Wireshark's local lua plugin path
+    - `global` as first argument will install the dissector to Wireshark's global lua plugin path. Note that for a global installation the script must be run with elevated privileges.
+    - `verbose` as second argument will enable verbose output
 1. and go back here
 1. Restart Wireshark to load the dissector.
 1. You might get an error message from Wireshark, especially on Windows systems, that some lua libraries were not found. If that happens, please restart Wireshark again.
@@ -37,9 +35,11 @@ CheckOCPP is a Wireshark dissector for the Open Charge Point Protocol (OCPP). It
 ## Usage
 
 1. Open Wireshark
-2. Navigate to `Edit > Preferences > Protocols > OCPP` and modify the path to the schemas.
+2. Navigate to `Edit > Preferences > Protocols > OCPP` and ...
+    - ... modify the path to the schemas, and
+    - ... choose the protocol version to be dissected
 3. Start capturing network traffic.
-2. Apply the filter `ocpp` to isolate OCPP traffic if single dissector is installed. If not, search by `ocpp1.6`, `ocpp2.0`, or `ocpp2.0.1`.
+2. Apply the filter `ocpp` to isolate OCPP traffic.
 3. Add the coloring rules.
 4. Expand the OCPP protocol details to inspect message type, message ID, and payload validation results.
 5. Look for highlighted packets to identify non-compliant or misconfigured OCPP messages.
@@ -49,8 +49,8 @@ CheckOCPP is a Wireshark dissector for the Open Charge Point Protocol (OCPP). It
 - It only validates OCPP JSON version, not SOAP version.
 
 ## Known issues
-- The `installWin.cmd` script replaces the libraries `lua-cjson`,and `net-url` with the version necessary for this plugin if they were already installed before the script started. This might break some other programs if one makes heavy use of lua.
-    - Possible Workaround: Install the plugin manually and also install the necessary lua libraries manually with luarocks and create a new rock. Afterwards, add the newly created rock to the LUA_PATH and LUA_CPATH variables.
+- The `installWin.cmd` and `installLinux.sh` script replaces the libraries `lua-cjson`,and `net-url` with the version necessary for this plugin if they were already installed before the script started. This might break some other programs if one makes heavy use of lua.
+    - Possible Workaround: Install the plugin manually and also install the necessary lua libraries manually with luarocks by creating a new rock. Afterwards, add the newly created rock to the LUA_PATH and LUA_CPATH variables.
 
 ## Information and Links for developers
 - An introduction to Batch programming (Windows): https://tutorialreference.com/batch-scripting/batch-script-introduction
