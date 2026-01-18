@@ -1,6 +1,10 @@
 -- Define the WebSocket dissector
 ocpp_proto = Proto("ocpp", "Open Charge Point Protocol Dissector")
 
+-- Set the locale to standard C value as cjson would otherwise store numbers from the json files
+-- with a comma (,) as decimal separator. This would break the jsonschema module.
+os.setlocale("C")
+
 -- Define preferences for the plugin
 --[[
 local schemaTableList = {
@@ -93,6 +97,7 @@ function ocpp_proto.prefs_changed()
     print("*************************1.6*************************")
     schemas16 = {}
     ocpputil.load_schema(ocpp_proto.prefs.schemas16, schemas16)
+    print("************* Finished loading schemas **************")
     areSchemasLoaded = true
 end
 
@@ -342,8 +347,6 @@ function ocpp_proto.dissector(buffer, pinfo, tree)
         end
     else
         if not (ocpp_proto.prefs.proto_version == OCPP_ALL_VERSIONS) then
-            -- TODO add expert information on invalid packet as by ocppXYDissecotr.lua
-            -- TODO remove the ocppXYDissector.lua when done
             local rv, vers_str = advanced_get(OCPP_VERS_2_DISSECT, 3, 2, ocpp_proto.prefs.proto_version)
             pinfo.cols.protocol = "OCPP " .. vers_str
             local subtree = tree:add(ocpp_proto, buffer(), "OCPP Non-Compliant Packet")
