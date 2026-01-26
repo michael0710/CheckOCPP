@@ -7,9 +7,6 @@ CheckOCPP is a Wireshark dissector for the Open Charge Point Protocol (OCPP). It
 - **Protocol compliance validation**: Checks message structure and schema conformity.
 - **Non-compliant packet highlighting**: Flags invalid packets to aid debugging and compliance verification.
 - **IPv4/IPv6 traffic distinction**: Provides a visual indicator for OCPP packets transmitted over IPv4.
-- **Selectable procotol version**:
-    - option **All versions**: Processes OCPP packets without distinguishing between versions.
-    - option **specific version**: Dissects only one specific protocol version and adds expert information for more precise analysis.
 
 ## Installation
 1. Ensure you have Wireshark installed on your system.
@@ -35,14 +32,20 @@ CheckOCPP is a Wireshark dissector for the Open Charge Point Protocol (OCPP). It
 ## Usage
 
 1. Open Wireshark
-2. Navigate to `Edit > Preferences > Protocols > OCPP` and ...
-    - ... modify the path to the schemas, and
-    - ... choose the protocol version to be dissected
+2. Navigate to `Edit > Preferences > Protocols > OCPP` and modify the path to the schemas.
 3. Start capturing network traffic.
-2. Apply the filter `ocpp` to isolate OCPP traffic.
+2. Apply the display filter `ocpp` to isolate all OCPP traffic, or apply a more detailed display filter with the following options:
+    - `ocpp.message_type` (integer) 2=Request, 3=Response, 4=Error
+    - `ocpp.message_id` (string)
+    - `ocpp.message_name` (string)
+    - `ocpp.payload` (string)
+    - `ocpp.valid` (bool)
+    - `ocpp.version` (string) "1.6", "2.0", "2.0.1", ...
+    - `ocpp.ipv6` (bool)
 3. Add the coloring rules.
 4. Expand the OCPP protocol details to inspect message type, message ID, and payload validation results.
 5. Look for highlighted packets to identify non-compliant or misconfigured OCPP messages.
+6. Go to `Analyze > Expert information` to get an overview of all abnormal OCPP messages.
 
 ## Limitations
 - CheckOCPP only works with unencrypted traffic. If TLS is enabled, decryption keys are required.
@@ -55,3 +58,9 @@ CheckOCPP is a Wireshark dissector for the Open Charge Point Protocol (OCPP). It
 ## Information and Links for developers
 - An introduction to Batch programming (Windows): https://tutorialreference.com/batch-scripting/batch-script-introduction
 - Information on Batch command expansion (Windows): https://stackoverflow.com/questions/4094699/how-does-the-windows-command-interpreter-cmd-exe-parse-scripts/4095133#4095133
+
+### How does Wireshark find the OCPP dissector?
+Wireshark has all its integrated dissectors in the folder `<root>/epan/dissectors/`.
+There is the WebSocket dissector in the file `packet-websocket.c`.
+In the WebSocket dissector's `dissect_websocket_frame(...)` function, the information `Sec-WebSocket-Protocol` stored in HTTP's `Switching Protocols` frame is used to determine the subprotocol. If there is a dissector registered which matches with that given protocol, that specific subdissector is used to process the packet.
+Therefore, we have to register every single version of the OCPP protocol (e.g. `ocpp1.6`, `ocpp2.0`, ...).

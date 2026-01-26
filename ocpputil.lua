@@ -81,6 +81,26 @@ local function parseJSONArray(jsonStr)
     return parts
 end
 
+local function printLuaTable(tbl, indent)
+    indent = indent or 0 -- Track the indentation level
+    local padding = string.rep("  ", indent) -- Indent with spaces
+    for key, value in pairs(tbl) do
+        if type(value) == "table" then
+            -- Print the key and recurse into the nested table
+            print(padding .. "\"" .. tostring(key) .. "\"" .. " : {")
+            printLuaTable(value, indent + 1)
+            print(padding .. "}")
+        else
+            -- Print the key-value pair
+            if (type(value) == "number") then
+                print(padding .. "\"" .. tostring(key) .. "\"" .. " : " .. tostring(value) .. " (number)")
+            else
+                print(padding .. "\"" .. tostring(key) .. "\"" .. " : " .. tostring(value))
+            end
+        end
+    end
+end
+
 local function validate_schema(payload, schema_group, schema_name_key)
     local schema = schema_group[schema_name_key]
     if not schema then
@@ -121,24 +141,36 @@ local function load_schema(schema_dir, schema_var)
                 schema_file:close()
                 local success, schema = pcall(cjson.decode, schema_content)
                 if success then
+                    -- set locale to "C" temporarily
+                    -- (workaround until the jsonschema module is fixed
+                    --  see https://github.com/api7/jsonschema/issues/95)
+                    active_locale = os.setlocale(nil)
+                    os.setlocale("C")
                     local success_validator, compiled_schema = pcall(jsonschema.generate_validator, schema)
                     if success_validator then
                         -- Store the compiled schema
                         local schema_name = file:gsub("%.json$", ""):gsub("_v%d+p%d+$", "")
-                        my_validator = jsonschema.generate_validator(schema)
-                        schema_var[schema_name] = my_validator
+                        schema_var[schema_name] = compiled_schema
                     else
+                        print("Call to generate_validator not successful: " .. compiled_schema)
                         -- Retry after removing $id
+                        -- (workaround until jsonschema is fixed
+                        --  see https://github.com/api7/jsonschema/issues/67)
+                        print("Retrying " .. file .. " after removing $id")
                         remove_id_property(schema)
                         success_validator, compiled_schema = pcall(jsonschema.generate_validator, schema)
                         if success_validator then
                             local schema_name = file:gsub("%.json$", ""):gsub("_v%d+p%d+$", "")
-                            my_validator = jsonschema.generate_validator(schema)
-                            schema_var[schema_name] = my_validator
+                            schema_var[schema_name] = compiled_schema
                         else
                             print("Error compiling schema for file after removing $id: " .. file .. ": " .. compiled_schema)
+                            print("Schema is:")
+                            print("{")
+                            printLuaTable(schema, 1)
+                            print("}")
                         end
                     end
+                    os.setlocale(active_locale)
                 else
                     print("Error decoding schema for file: " .. file .. ": " .. schema)
                 end
@@ -156,5 +188,6 @@ ocpputil.cleanElement       = cleanElement
 ocpputil.parseJSONArray     = parseJSONArray
 ocpputil.validate_schema    = validate_schema
 ocpputil.load_schema        = load_schema
+ocpputil.printLuaTable      = printLuaTable
 
 return ocpputil
