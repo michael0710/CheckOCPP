@@ -23,7 +23,7 @@ if NOT "%1"=="global" (
         exit /B 1
     )
 )
-set installDirType=%2
+set installDirType=%1
 
 if "%3"=="verbose" (
     echo Activating verbose output ...
@@ -59,7 +59,7 @@ if "!pathToWireshark:~0,26!"=="C:\Program Files\Wireshark" (
     echo # Found portable app at "!pathToWireshark!"
 )
 
-if isGlobalInstallation==true (
+if %isGlobalInstallation%==true (
     if "%installDirType%"=="global" (
         set luaModulesDirType=--global
         set pluginPath=%pathToWireshark%plugins
@@ -83,17 +83,17 @@ call luarocks > nul 2>&1 || (echo # ERROR: LuaRocks is not available. Please ins
 echo # LuaRocks is available
 
 echo.
-if NOT exist %pluginPath% (
+if NOT exist "%pluginPath%" (
     echo Creating directory '%pluginPath%' ...
-    call mkdir %pluginPath%
+    call mkdir "%pluginPath%"
     if NOT %ERRORLEVEL%==0 (
         echo # ERROR: 'mkdir' command failed with return code %ERRORLEVEL%
         exit /B 1
     )
 )
 
-echo Installing plugin to %pluginPath% ...
-call COPY /Y /V ocppDissector.lua %pluginPath% > nul 2>&1 || (echo # ERROR: 'COPY' command failed with return code %ERRORLEVEL% & exit /B 1)
+echo Installing plugin to '%pluginPath%' ...
+call COPY /Y /V ocppDissector.lua "%pluginPath%" > nul 2>&1 || (echo # ERROR: 'COPY' command failed & exit /B 1)
 
 echo.
 echo Finding the path to the lua libraries ...
@@ -106,12 +106,12 @@ echo.
 echo Installing the necessary lua libraries with luarocks ...
 
 echo # Installing 'net-url' by executing 'luarocks --lua-version %wsLuaVersion% %luaModulesDirType% install net-url 1.1-1' ...
-call luarocks --lua-version %wsLuaVersion% %luaModulesDirType% install net-url 1.1-1 > nul 2>&1 || (  echo # ERROR: luarocks command to install 'net-url' version 1.1-1 failed with return code %ERRORLEVEL% ^
+call luarocks --lua-version %wsLuaVersion% %luaModulesDirType% install net-url 1.1-1 > nul 2>&1 || (  echo # ERROR: luarocks command to install 'net-url' version 1.1-1 failed ^
                                                                                                     & echo # Please try to rerun the prompted command to get more detailed information about the error ^
                                                                                                     & exit /B 1)
 
 echo # Installing 'lua-cjson' by executing 'luarocks --lua-version %wsLuaVersion% %luaModulesDirType% install lua-cjson 2.1.0.10-1' ...
-call luarocks --lua-version %wsLuaVersion% %luaModulesDirType% install lua-cjson 2.1.0.10-1 > nul 2>&1 || (  echo # ERROR: luarocks command to install 'lua-cjson' version 2.1.0.10-1 failed with return code %ERRORLEVEL% ^
+call luarocks --lua-version %wsLuaVersion% %luaModulesDirType% install lua-cjson 2.1.0.10-1 > nul 2>&1 || (  echo # ERROR: luarocks command to install 'lua-cjson' version 2.1.0.10-1 failed ^
                                                                                                            & echo # Please try to rerun the prompted command to get more detailed information about the error ^
                                                                                                            & exit /B 1)
 
@@ -124,35 +124,35 @@ REM therefore enough for us to just get the lua source code of the 'jsonschema' 
 REM in the lua library folder where we already stored our own 'ocpputil.lua' file.
 echo # Downloading the 'jsonschema' v.0.9.9 release ...
 call powershell -Command "(New-Object System.Net.WebClient).DownloadFile('https://github.com/api7/jsonschema/archive/refs/tags/v0.9.9.zip', 'jsonschema-0.9.9.zip')" ^
-             > nul 2>&1 || (echo # ERROR: 'Download' command failed with return code %ERRORLEVEL% & exit /B 1)
+             > nul 2>&1 || (echo # ERROR: 'Download' command failed & exit /B 1)
 
 if exist jsonschema-0.9.9 (
     echo # Clean up artifact from previous run ...
     call rmdir /s /q jsonschema-0.9.9 > nul 2>&1
 )
 echo # Unzipping the 'jsonschema' source ...
-call unzip jsonschema-0.9.9.zip > nul 2>&1 || (echo # ERROR: 'unzip' command failed with return code %ERRORLEVEL% & exit /B 1)
+call unzip jsonschema-0.9.9.zip > nul 2>&1 || (echo # ERROR: 'unzip' command failed & exit /B 1)
 echo # Removing zip archive ...
 call del /f /q jsonschema-0.9.9.zip > nul 2>&1 || (echo # WARNING: 'del' command failed)
 echo # Installing module 'jsonschema.lua' to local lua libraries ...
-call COPY /Y /V jsonschema-0.9.9\lib\jsonschema.lua %luaPath% > nul 2>&1 || (echo # ERROR: 'COPY' command failed with return code %ERRORLEVEL% & exit /B 1)
-if NOT exist %luaPath%\jsonschema\ (
+call COPY /Y /V jsonschema-0.9.9\lib\jsonschema.lua "%luaPath%" > nul 2>&1 || (echo # ERROR: 'COPY' command failed & exit /B 1)
+if NOT exist "%luaPath%\jsonschema\" (
     echo # Creating directory '%luaPath%\jsonschema\' ...
-    call mkdir %luaPath%\jsonschema\
+    call mkdir "%luaPath%\jsonschema\"
     if NOT %ERRORLEVEL%==0 (
         echo # ERROR: 'mkdir' command failed with return code %ERRORLEVEL%
         exit /B 1
     )
 )
 echo # Installing module 'jsonschema\store.lua' to local lua libraries ...
-call COPY /Y /V jsonschema-0.9.9\lib\jsonschema\store.lua %luaPath%\jsonschema\ > nul 2>&1 || (echo # ERROR: 'COPY' command failed with return code %ERRORLEVEL% & exit /B 1)
+call COPY /Y /V jsonschema-0.9.9\lib\jsonschema\store.lua "%luaPath%\jsonschema\" > nul 2>&1 || (echo # ERROR: 'COPY' command failed & exit /B 1)
 echo # Clean up unzipped folder structure ...
 call rmdir /s /q jsonschema-0.9.9 > nul 2>&1 || (echo # WARNING: 'rmdir' command failed)
 
 REM if the Wireshark installation is in C:\Program Files and the user wishes to install the plugin globally, it might not be possible due to missing permissions
 echo.
 echo Installing utility module 'ocpputil.lua' to local lua libraries ...
-call COPY /Y /V ocpputil.lua %luaPath% > nul 2>&1 || (echo # ERROR: 'COPY' command failed with return code %ERRORLEVEL% & exit /B 1)
+call COPY /Y /V ocpputil.lua "%luaPath%" > nul 2>&1 || (echo # ERROR: 'COPY' command failed & exit /B 1)
 
 echo.
 if defined LUA_PATH_%wsLuaVersion:~0,1%_%wsLuaVersion:~2,1% (
