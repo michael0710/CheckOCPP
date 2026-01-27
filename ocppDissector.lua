@@ -53,7 +53,7 @@ local schemas_table = {}
 local msg_name_id_lut = {}
 
 -- reload schemas when preferences are changed
-function ocpp_proto.prefs_changed()
+function update_schemas()
     for idx, version in pairs(OCPP_JSON_VERSIONS) do
         print("*************************" .. version .. "*************************")
         schemas_table[version] = {}
@@ -61,6 +61,10 @@ function ocpp_proto.prefs_changed()
     end
     print("************* Finished loading schemas **************")
     areSchemasLoaded = true
+end
+
+function ocpp_proto.prefs_changed()
+    update_schemas()
 end
 
 -- Function to validate JSON against a schema
@@ -154,7 +158,7 @@ local function common_dissector(buffer, pinfo, tree, proto_version)
         -- usually wireshark calls the prefs_changed() function on startup
         -- and hereby loads our schemas. However, somehow I don't trust
         -- that feature, so make sure the schemas are loaded here.
-        ocpp_proto.prefs_changed()
+        update_schemas()
     end
     
     local length = buffer:len()
