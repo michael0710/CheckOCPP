@@ -6,7 +6,6 @@ CheckOCPP is a Wireshark dissector for the Open Charge Point Protocol (OCPP). It
 - **Automatic OCPP version detection**: Identifies whether captured traffic corresponds to OCPP 1.6J, 2.0J, or 2.0.1J.
 - **Protocol compliance validation**: Checks message structure and schema conformity.
 - **Non-compliant packet highlighting**: Flags invalid packets to aid debugging and compliance verification.
-- **IPv4/IPv6 traffic distinction**: Provides a visual indicator for OCPP packets transmitted over IPv4.
 
 ## Installation
 1. Ensure you have Wireshark installed on your system.
@@ -32,20 +31,25 @@ CheckOCPP is a Wireshark dissector for the Open Charge Point Protocol (OCPP). It
 ## Usage
 
 1. Open Wireshark
-2. Navigate to `Edit > Preferences > Protocols > OCPP` and modify the path to the schemas.
-3. Start capturing network traffic.
-2. Apply the display filter `ocpp` to isolate all OCPP traffic, or apply a more detailed display filter with the following options:
-    - `ocpp.message_type` (integer) 2=Request, 3=Response, 4=Error
-    - `ocpp.message_id` (string)
-    - `ocpp.message_name` (string)
+1. Navigate to `Edit > Preferences > Protocols > OCPP` and modify the path to the schemas.
+1. Start capturing network traffic.
+1. Apply the display filter `ocpp` to isolate all OCPP traffic, or apply a more detailed display filter with the following options:
+    - `ocpp.message_type_id` (integer) `2=CALL 3=CALLRESULT 4=CALLERROR` for version 2.1 the values `5=CALLRESULTERROR 6=SEND` are also valid
+    - `ocpp.unique_id` (string) only avaliable with protocol version 1.6
+    - `ocpp.message_id` (string) only available with protocol version >= 2.0
+    - `ocpp.action` (string)
     - `ocpp.payload` (string)
+    - `ocpp.error_code` (string)
+    - `ocpp.error_description` (string)
+    - `ocpp.error_details` (string)
     - `ocpp.valid` (bool)
     - `ocpp.version` (string) "1.6", "2.0", "2.0.1", ...
-    - `ocpp.ipv6` (bool)
-3. Add the coloring rules.
-4. Expand the OCPP protocol details to inspect message type, message ID, and payload validation results.
-5. Look for highlighted packets to identify non-compliant or misconfigured OCPP messages.
-6. Go to `Analyze > Expert information` to get an overview of all abnormal OCPP messages.
+    - `ocpp.error_info` (string)
+1. If one is especially interested in IPv6 or IPv4 traffic, Wireshark's native display filter `ipv6` or `!ipv6` can be used in conjunction with the aforesaid filter options
+1. Add the coloring rules.
+1. Expand the OCPP protocol details to inspect the message and the payload validation results.
+1. Look for highlighted packets to identify non-compliant or misconfigured OCPP messages.
+1. Go to `Analyze > Expert information` to get an overview of all abnormal OCPP messages.
 
 ## Limitations
 - CheckOCPP only works with unencrypted traffic. If TLS is enabled, decryption keys are required.

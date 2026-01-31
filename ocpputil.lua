@@ -44,6 +44,12 @@ local function cleanElement(str)
 end
 
 local function parseJSONArray(jsonStr)
+    -- check if the outer square brackets exist
+    if    (jsonStr:sub(1,1) ~= "[")
+       or (jsonStr:sub(#jsonStr, #jsonStr) ~= "]") then
+        return false, nil
+    end
+
     local parts = {}
     local in_quotes = false
     local escape = false
@@ -76,9 +82,15 @@ local function parseJSONArray(jsonStr)
         buffer = buffer .. char
     end
 
+    -- do a little validity check here
+    if    in_quotes
+       or (bracket_count ~= 0) then
+        return false, nil
+    end
+
     -- Add the last element
     parts[#parts + 1] = buffer:match("^%s*(.-)%s*$") -- Trim whitespace
-    return parts
+    return true, parts
 end
 
 local function printLuaTable(tbl, indent)
@@ -181,13 +193,13 @@ local function load_schema(schema_dir, schema_var)
     end
 end
 
-ocpputil.remove_bom         = remove_bom
-ocpputil.remove_id_property = remove_id_property
-ocpputil.jsonToLua          = jsonToLua
-ocpputil.cleanElement       = cleanElement
-ocpputil.parseJSONArray     = parseJSONArray
-ocpputil.validate_schema    = validate_schema
-ocpputil.load_schema        = load_schema
-ocpputil.printLuaTable      = printLuaTable
+ocpputil.remove_bom            = remove_bom
+ocpputil.remove_id_property    = remove_id_property
+ocpputil.jsonToLua             = jsonToLua
+ocpputil.cleanElement          = cleanElement
+ocpputil.parseJSONArray        = parseJSONArray
+ocpputil.validate_schema       = validate_schema
+ocpputil.load_schema           = load_schema
+ocpputil.printLuaTable         = printLuaTable
 
 return ocpputil
